@@ -5,7 +5,7 @@ const db = new Database("lastrace.db");
 db.exec(`
   CREATE TABLE IF NOT EXISTS users (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    username TEXT NOT NULL,
+    username TEXT NOT NULL UNIQUE,
     password TEXT NOT NULL
   );
 
@@ -16,7 +16,7 @@ db.exec(`
 
   CREATE TABLE IF NOT EXISTS stations (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    name TEXT NOT NULL,
+    name TEXT NOT NULL UNIQUE,
     interchange BOOLEAN NOT NULL
   );
 
@@ -40,7 +40,7 @@ db.exec(`
 
   CREATE TABLE IF NOT EXISTS lines (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    color TEXT NOT NULL
+    color TEXT NOT NULL UNIQUE
   );
 
   INSERT OR IGNORE INTO lines (color) VALUES
@@ -85,9 +85,9 @@ db.exec(`
   (16, 5);
 
   CREATE TABLE IF NOT EXISTS segments (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
     station1 INTEGER NOT NULL,
     station2 INTEGER NOT NULL,
+    PRIMARY KEY (station1, station2),
     FOREIGN KEY (station1) REFERENCES stations(id),
     FOREIGN KEY (station2) REFERENCES stations(id)
   );
