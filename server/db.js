@@ -2,17 +2,14 @@ import Database from "better-sqlite3";
 
 const db = new Database("lastrace.db");
 
+db.pragma("foreign_keys = ON");
+
 db.exec(`
   CREATE TABLE IF NOT EXISTS users (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     username TEXT NOT NULL UNIQUE,
     password TEXT NOT NULL
   );
-
-  INSERT OR IGNORE INTO users (username, password) VALUES
-  ('Mario', 'abc1'),
-  ('Paola', 'abc2'),
-  ('Andrea', 'abc3');
 
   CREATE TABLE IF NOT EXISTS stations (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -141,10 +138,5 @@ db.exec(`
     FOREIGN KEY (start_station) REFERENCES stations(id),
     FOREIGN KEY (end_station) REFERENCES stations(id)
   );
-
-  INSERT OR IGNORE INTO games (user_id, score, start_station, end_station) VALUES
-  (1, 11, 10, 3),
-  (1, 21, 4, 11),
-  (2, 30, 6, 13);
 `);
 export default db;
