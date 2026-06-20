@@ -84,31 +84,33 @@ db.exec(`
   CREATE TABLE IF NOT EXISTS segments (
     station1 INTEGER NOT NULL,
     station2 INTEGER NOT NULL,
+    line INTEGER NOT NULL,
     PRIMARY KEY (station1, station2),
     FOREIGN KEY (station1) REFERENCES stations(id),
-    FOREIGN KEY (station2) REFERENCES stations(id)
+    FOREIGN KEY (station2) REFERENCES stations(id),
+    FOREIGN KEY (line) REFERENCES lines(id)
   );
 
-  INSERT OR IGNORE INTO segments (station1, station2) VALUES
-  (1, 2),
-  (1, 9),
-  (1, 12),
-  (2, 3),
-  (3, 15),
-  (4, 5),
-  (5, 9),
-  (6, 12),
-  (7, 10),
-  (7, 12),
-  (8, 9),
-  (8, 14),
-  (9, 10),
-  (10, 11),
-  (11, 12),
-  (11, 13),
-  (13, 14),
-  (14, 15),
-  (14, 16);
+  INSERT OR IGNORE INTO segments (station1, station2, line) VALUES
+  (1, 2, 1),
+  (1, 9, 1),
+  (1, 12, 1),
+  (2, 3, 1),
+  (3, 15, 1),
+  (4, 5, 2),
+  (5, 9, 2),
+  (6, 12, 3),
+  (7, 10, 3),
+  (7, 12, 3),
+  (8, 9, 4),
+  (8, 14, 4),
+  (9, 10, 2),
+  (10, 11, 2),
+  (11, 12, 1),
+  (11, 13, 5),
+  (13, 14, 5),
+  (14, 15, 4),
+  (14, 16, 5);
 
   CREATE TABLE IF NOT EXISTS events (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -133,6 +135,9 @@ db.exec(`
     score INTEGER NOT NULL,
     start_station INTEGER NOT NULL,
     end_station INTEGER NOT NULL,
+    finished BOOLEAN NOT NULL DEFAULT TRUE,
+    finished BOOLEAN DEFAULT FALSE,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 
     FOREIGN KEY (user_id) REFERENCES users(id),
     FOREIGN KEY (start_station) REFERENCES stations(id),

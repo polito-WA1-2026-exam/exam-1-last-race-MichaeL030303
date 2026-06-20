@@ -28,8 +28,8 @@ const paola = db.prepare(
 
 const gameStmt = db.prepare(`
   INSERT OR IGNORE INTO games
-  (user_id, score, start_station, end_station)
-  VALUES (?, ?, ?, ?)
+  (user_id, score, start_station, end_station, finished, created_at)
+  VALUES (?, ?, ?, ?, 1, CURRENT_TIMESTAMP)
 `);
 
 gameStmt.run(mario.id, 11, 10, 3);

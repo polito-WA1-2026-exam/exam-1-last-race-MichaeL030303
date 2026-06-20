@@ -23,10 +23,10 @@ function bfsDistance(graph, start, target) {
   while (queue.length) {
     const [node, dist] = queue.shift();
 
-    if (node === target) return dist;
-
     if (visited.has(node)) continue;
     visited.add(node);
+
+    if (node === target) return dist;
 
     for (const n of graph[node] || []) {
       queue.push([n, dist + 1]);
