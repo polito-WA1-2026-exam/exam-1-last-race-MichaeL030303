@@ -1,0 +1,14 @@
+.route-list {
+  padding: 10px;
+  border-left: 2px solid #ccc;
+}
+
+.route-list ul {
+  list-style: none;
+  padding: 0;
+}
+
+.route-list li {
+  padding: 5px 0;
+  font-weight: bold;
+}
