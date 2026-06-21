@@ -1,14 +1,16 @@
 import { useState, useContext } from "react";
 import { useNavigate } from "react-router-dom";
 import { logIn } from "../utils/api.js";
-import { AuthContext } from "../context/AuthContext.jsx";
+import { AuthContext } from "../context/authContext.jsx";
 
 function Login() {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [errorMsg, setErrorMsg] = useState("");
 
-  const { login } = useContext(AuthContext);
+  const auth = useContext(AuthContext);
+  const login = auth?.login; // 🔥 SAFE
+
   const navigate = useNavigate();
 
   const handleSubmit = async (e) => {
@@ -17,10 +19,14 @@ function Login() {
     try {
       const user = await logIn({ username, password });
 
-      login(user);         // ✅ context unico
-      navigate("/game");   // vai al gioco
+      if (!login) {
+        throw new Error("AuthContext not ready");
+      }
 
+      login(user);
+      navigate("/game");
     } catch (err) {
+      console.error(err);
       setErrorMsg("Username o password errati");
     }
   };

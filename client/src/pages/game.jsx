@@ -1,11 +1,19 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState, useContext } from "react";
+import Map from "../components/map.jsx";
+import RouteList from "../components/routeList.jsx";
+import { useGame } from "../context/gameContext.jsx";
+import { getNetwork, getMyGames, getRanking } from "../utils/api.js";
+import { AuthContext } from "../context/authContext.jsx";
 
-import Map from "../components/Map.jsx";
-import RouteList from "../components/RouteList.jsx";
-
-import { useGame } from "../context/GameContext";
+function parseUTC(dateStr) {
+  if (!dateStr) return null;
+  const s = dateStr.replace(" ", "T");
+  return new Date(s.endsWith("Z") ? s : `${s}Z`);
+}
 
 function Game() {
+  const { game, startGame, submitGame, time, finishedRef, resetGame, phase } = useGame();
+
   const [mapOpen, setMapOpen] = useState(false);
   const [route, setRoute] = useState([]);
   const [pastGames, setPastGames] = useState([]);
@@ -15,19 +23,18 @@ function Game() {
   const [replayStep, setReplayStep] = useState(-1);
   const [submittedRoute, setSubmittedRoute] = useState([]);
   const [replayActive, setReplayActive] = useState(false);
-
-  const { game, startGame, setGame, time, submitGame } = useGame();
-  const gameActive = !!game && !finishedGame;
-  const gameStarted = gameActive || replayActive;
-
+  const [globalRanking, setGlobalRanking] = useState([]);
   const [network, setNetwork] = useState({
     stations: [],
     segments: [],
     lines: [],
   });
+  const { user, loading } = useContext(AuthContext);
 
-  const finishedRef = useRef(false);
+  const gameActive = phase === "playing" && !!game;
+  const gameStarted = (!!game && phase !== "idle") || replayActive;
 
+  // Resolve station ID from various property names
   const resolveStationId = (value) => {
     if (value == null) return null;
     if (typeof value === "object") return value.id ?? null;
@@ -36,254 +43,215 @@ function Game() {
 
   const getGameStartId = () =>
     resolveStationId(
-      game?.start ??
-      game?.startStation ??
-      game?.start_station ??
-      game?.from ??
-      game?.fromStation ??
-      game?.from_station
+      game?.startStation?.id ??
+        game?.start_station ??
+        game?.startStation ??
+        game?.from
     );
 
   const getGameEndId = () =>
     resolveStationId(
-      game?.end ??
-      game?.endStation ??
-      game?.end_station ??
-      game?.to ??
-      game?.toStation ??
-      game?.to_station
+      game?.endStation?.id ??
+        game?.end_station ??
+        game?.endStation ??
+        game?.to
     );
 
   const getStationName = (id) => {
     const stationId = resolveStationId(id);
-    const station = network.stations.find((s) =>
-      s.id === stationId || s.id?.toString() === stationId?.toString()
+    const station = network.stations.find(
+      (s) => s.id === stationId || s.id?.toString() === stationId?.toString()
     );
-    return station?.name || stationId || "Sconosciuto";
+    return station?.name || `Station ${stationId}`;
   };
 
+  // Load network and past games on mount
   useEffect(() => {
-    fetch("http://localhost:3001/api/network", {
-      credentials: "include",
-    })
-      .then((res) => res.json())
-      .then((data) => setNetwork(data))
-      .catch(() => setNetwork({ stations: [], segments: [], lines: [] }));
+    (async () => {
+      try {
+        const networkData = await getNetwork();
+        setNetwork(networkData || { stations: [], segments: [], lines: [] });
+      } catch (error) {
+        console.error("Failed to load network:", error);
+        setNetwork({ stations: [], segments: [], lines: [] });
+      }
 
-    fetch("http://localhost:3001/api/game/my-games", {
-      credentials: "include",
-    })
-      .then((res) => res.json())
-      .then((data) => setPastGames(data || []))
-      .catch(() => setPastGames([]))
-      .finally(() => setLoadingPastGames(false));
+      try {
+        const games = await getMyGames();
+        setPastGames(games || []);
+      } catch (error) {
+        console.error("Failed to load past games:", error);
+        setPastGames([]);
+      } finally {
+        setLoadingPastGames(false);
+      }
+    })();
   }, []);
 
+  // Initialize route when game starts
   useEffect(() => {
-    const startId = getGameStartId();
-
-    if (game && startId != null) {
-      setRoute([startId]);
-      setReplayActive(false);
-      setReplayEvents([]);
-      setReplayStep(-1);
-      setSubmittedRoute([]);
+    if (game) {
+      const startId = getGameStartId();
+      if (startId != null) {
+        setRoute([startId]);
+        setReplayActive(false);
+        setReplayEvents([]);
+        setReplayStep(-1);
+        setSubmittedRoute([]);
+        setFinishedGame(false);
+      }
     }
   }, [game]);
 
+  // Handle replay auto-advance
   useEffect(() => {
-    if (!replayActive || replayStep < 0 || replayEvents.length === 0) return;
-    if (replayStep >= replayEvents.length - 1) return;
+    if (!replayActive || replayEvents.length === 0) return;
+
+    const maxStep = replayEvents.length - 1;
+    if (replayStep > maxStep) {
+      setReplayActive(false);
+      setFinishedGame(true);
+      return;
+    }
 
     const timer = setTimeout(() => {
-      setReplayStep((step) => step + 1);
-    }, 1200);
+      if (replayStep >= maxStep) {
+        setReplayActive(false);
+        setFinishedGame(true);
+      } else {
+        setReplayStep((step) => step + 1);
+      }
+    }, 1500);
 
     return () => clearTimeout(timer);
   }, [replayActive, replayStep, replayEvents.length]);
 
-  const stopTimer = () => {
-    if (intervalRef.current) {
-      clearInterval(intervalRef.current);
-      intervalRef.current = null;
+  const handleStartGame = async () => {
+    try {
+      setMapOpen(false);
+      setRoute([]);
+      setFinishedGame(false);
+      setReplayActive(false);
+      setReplayEvents([]);
+      setReplayStep(-1);
+      setSubmittedRoute([]);
+      await startGame();
+    } catch (error) {
+      console.error("Failed to start game:", error);
+      alert("Failed to start game");
     }
   };
 
-  const startTimer = () => {
-    setTime(90);
-    finishedRef.current = false;
-
-    stopTimer();
-
-    intervalRef.current = setInterval(() => {
-      if (finishedRef.current) return;
-
-      setTime((prev) => {
-        if (prev <= 1) {
-          finishGame(true);
-          return 0;
-        }
-        return prev - 1;
-      });
-    }, 1000);
+  const refreshRankings = async () => {
+    try {
+      const [personal, global] = await Promise.all([getMyGames(), getRanking()]);
+      setPastGames(personal || []);
+      setGlobalRanking(global || []);
+    } catch (error) {
+      console.error("Failed to refresh rankings:", error);
+    }
   };
 
-  const handleStartGame = async () => {
-    setMapOpen(false);
+  const finishGame = async () => {
+    try {
+      if (!route || route.length < 2) {
+        alert("Seleziona un percorso valido prima del submit");
+        return;
+      }
+
+      setMapOpen(false);
+
+      if (!game) {
+        console.error("No active game");
+        return;
+      }
+
+      const data = await submitGame(route);
+
+      if (!data) {
+        alert("Errore durante il submit");
+        finishedRef.current = false;
+        return;
+      }
+
+      if (!data.valid) {
+        alert(`Invalid route: ${data.reason}`);
+        setFinishedGame(true);
+        setRoute([]);
+        await refreshRankings();
+        return;
+      }
+
+      // Valid route: prepare replay
+      setSubmittedRoute(route);
+      setReplayEvents(data.events || []);
+      setReplayStep(0);
+      setReplayActive(true);
+
+      await refreshRankings();
+    } catch (error) {
+      console.error("Failed to finish game:", error);
+      alert("Errore durante il submit");
+      finishedRef.current = false;
+    }
+  };
+
+  const handlePlayAgain = async () => {
+    resetGame();
     setRoute([]);
     setFinishedGame(false);
     setReplayActive(false);
     setReplayEvents([]);
     setReplayStep(-1);
     setSubmittedRoute([]);
-
-    await startGame();
-  };
-
-  const finishGame = async (isAuto = false) => {
-    if (finishedRef.current) return;
-
-    finishedRef.current = true;
     setMapOpen(false);
-
-    if (!game) return;
-
-    const data = await submitGame(route);
-    if (!data) {
-      finishedRef.current = false;
-      return;
-    }
-
-    if (!data.valid) {
-      finishedRef.current = false;
-      console.error("Route invalid:", data.reason);
-      alert(`Invalid route: ${data.reason}`);
-      setFinishedGame(true);
-      setRoute([]);
-      setGame(null);
-      return;
-    }
-
-    setSubmittedRoute(route);
-    setReplayEvents(data.events || []);
-    setReplayStep(0);
-    setReplayActive(true);
-    setGame(null);
   };
 
-  const highlightedRoute = replayActive
-    ? submittedRoute.slice(0, replayStep + 2)
-    : [];
-
-  const currentEvent = replayActive && replayStep >= 0
-    ? replayEvents[replayStep]
-    : null;
-  
+  const highlightedRoute = replayActive ? submittedRoute.slice(0, replayStep + 2) : [];
+  const currentEvent = replayActive && replayStep >= 0 ? replayEvents[replayStep] : null;
   const startId = getGameStartId();
   const endId = getGameEndId();
-  
-  useEffect(() => {
-    if (!replayActive || replayEvents.length === 0) return;
-
-    const maxStep = replayEvents.length - 1;
-    const timer = setTimeout(() => {
-      if (replayStep >= maxStep) {
-        setReplayActive(false);
-        setFinishedGame(true);
-        setRoute([]);
-        setSubmittedRoute([]);
-        setReplayEvents([]);
-        setReplayStep(-1);
-        setGame(null);
-        return;
-      }
-      setReplayStep((step) => step + 1);
-    }, 1000);
-
-    return () => clearTimeout(timer);
-  }, [replayActive, replayStep, replayEvents.length]);
 
   return (
     <div className="game-page">
       {!gameStarted && (
         <>
-          <div
-            className="personal-leaderboard"
-            style={{
-              marginBottom: "20px",
-              padding: "10px",
-              border: "1px solid #ddd",
-              borderRadius: "8px",
-              background: "#fff",
-            }}
-          >
+          <div style={{ marginBottom: "20px", padding: "10px", border: "1px solid #ddd", borderRadius: "8px", background: "#fff" }}>
             <h2 style={{ margin: "0 0 10px" }}>Classifica personale</h2>
 
             {loadingPastGames ? (
-              <div>Caricamento...</div>
+              <p>Caricamento...</p>
             ) : pastGames.length > 0 ? (
               <ol style={{ margin: 0, paddingLeft: "20px" }}>
                 {pastGames.slice(0, 10).map((gameItem) => {
-                  const date = new Date(
-                    gameItem.created_at || gameItem.createdAt || gameItem.date
-                  );
-
+                  const date = parseUTC(gameItem.created_at);
                   return (
-                    <li
-                      key={
-                        gameItem.id ??
-                        `${gameItem.score}-${gameItem.created_at || gameItem.createdAt || gameItem.date}`
-                      }
-                    >
-                      {isNaN(date.getTime())
-                        ? "Data sconosciuta"
-                        : date.toLocaleString()}
-                      : {gameItem.score} punti
+                    <li key={gameItem.id}>
+                      {date ? date.toLocaleString() : "Data sconosciuta"}: {gameItem.score} punti
                     </li>
                   );
                 })}
               </ol>
             ) : (
-              <div>Nessun gioco passato</div>
+              <p>Nessun gioco passato</p>
             )}
           </div>
 
-          <div className="setup-buttons" style={{ display: "flex", gap: "10px" }}>
+          <div style={{ display: "flex", gap: "10px", marginBottom: "20px" }}>
             <button onClick={() => setMapOpen((open) => !open)}>
-              {mapOpen ? "Chiudi Map" : "Open Map"}
+              {mapOpen ? "Chiudi Map" : "Apri Map"}
             </button>
-            <button onClick={handleStartGame}>Start Game</button>
+            <button onClick={handleStartGame}>Inizia Gioco</button>
           </div>
 
           {mapOpen && (
-            <div
-              className="map-preview"
-              style={{
-                marginTop: "20px",
-                padding: "10px",
-                border: "1px solid #ddd",
-                borderRadius: "8px",
-                background: "#fff",
-              }}
-            >
-              <div
-                style={{
-                  display: "flex",
-                  justifyContent: "space-between",
-                  alignItems: "center",
-                  marginBottom: "10px",
-                }}
-              >
-                <h3 style={{ margin: 0 }}>Anteprima mappa</h3>
+            <div style={{ marginTop: "20px", padding: "10px", border: "1px solid #ddd", borderRadius: "8px", background: "#fff" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "10px" }}>
+                <h3 style={{ margin: 0 }}>Mappa</h3>
                 <button onClick={() => setMapOpen(false)}>Chiudi</button>
               </div>
               <div style={{ width: "100%", height: "500px" }}>
-                <Map
-                  stations={network.stations}
-                  segments={network.segments}
-                  lines={network.lines}
-                  showLines={true}
-                />
+                <Map stations={network.stations} segments={network.segments} lines={network.lines} showLines={true} />
               </div>
             </div>
           )}
@@ -291,110 +259,63 @@ function Game() {
       )}
 
       {gameStarted && (
-        <div
-          style={{
-            display: "flex",
-            width: "100%",
-            height: "calc(100vh - 80px)",
-          }}
-        >
-          <div
-            style={{
-              flex: 3,
-              minHeight: 0,
-              display: "flex",
-              flexDirection: "column",
-              justifyContent: "center",
-              alignItems: "stretch",
-              overflow: "hidden",
-              position: "relative",
-            }}
-          >
-            <div
-              style={{
-                width: "100%",
-                padding: "10px",
-                background: "#fff",
-                borderBottom: "1px solid #ddd",
-              }}
-            >
-              <strong>Partenza:</strong> {startId ? getStationName(startId) : "?"}{" "}
-              • <strong>Arrivo:</strong> {endId ? getStationName(endId) : "?"}
+        <div style={{ display: "flex", width: "100%", height: "calc(100vh - 80px)" }}>
+          <div style={{ flex: 3, minHeight: 0, display: "flex", flexDirection: "column", justifyContent: "center", alignItems: "stretch", overflow: "hidden", position: "relative" }}>
+            <div style={{ width: "100%", padding: "10px", background: "#fff", borderBottom: "1px solid #ddd" }}>
+              <strong>Partenza:</strong> {startId ? getStationName(startId) : "?"} • <strong>Arrivo:</strong> {endId ? getStationName(endId) : "?"}
             </div>
 
             <div style={{ position: "relative", flex: 1, minHeight: 0 }}>
-            <Map
-              stations={network.stations}
-              segments={network.segments}
-              lines={network.lines}
-              showLines={false}
-              highlightedRoute={highlightedRoute}
-            />
+              <Map
+                stations={network.stations}
+                segments={network.segments}
+                lines={network.lines}
+                showLines={false}
+                highlightedRoute={highlightedRoute}
+              />
 
-            {currentEvent && (
-              <div
-                style={{
-                  position: "absolute",
-                  top: 12,
-                  left: 12,
-                  padding: "12px",
-                  borderRadius: "10px",
-                  background: "rgba(0,0,0,0.8)",
-                  color: "#fff",
-                  maxWidth: "320px",
-                  zIndex: 5,
-                }}
-              >
-                <div style={{ fontWeight: "bold", marginBottom: "6px" }}>
-                  {`Evento ${replayStep + 1} / ${replayEvents.length}`}
+              {currentEvent && (
+                <div style={{ position: "absolute", top: 12, left: 12, padding: "12px", borderRadius: "10px", background: "rgba(0,0,0,0.8)", color: "#fff", maxWidth: "320px", zIndex: 5 }}>
+                  <div style={{ fontWeight: "bold", marginBottom: "6px" }}>
+                    Evento {replayStep + 1} / {replayEvents.length}
+                  </div>
+                  <div>{currentEvent.description || "Azione completata"}</div>
+                  <div style={{ marginTop: "8px", fontWeight: "bold" }}>{currentEvent.points ?? 0} punti</div>
                 </div>
-                <div>{currentEvent.description || currentEvent.text || "Azione completata"}</div>
-                <div style={{ marginTop: "8px", fontWeight: "bold" }}>
-                  +{currentEvent.points ?? currentEvent.score ?? 0} punti
-                </div>
-              </div>
-            )}
+              )}
             </div>
           </div>
 
-          <div
-            style={{
-              flex: 1,
-              minHeight: 0,
-              borderLeft: "1px solid #ddd",
-              display: "flex",
-              flexDirection: "column",
-              background: "#fafafa",
-            }}
-          >
-            <div
-              style={{
-                padding: "10px",
-                borderBottom: "1px solid #ddd",
-                fontWeight: "bold",
-                background: "#fff",
-              }}
-            >
-              ⏱ Time: {time}s
+          <div style={{ flex: 1, minHeight: 0, borderLeft: "1px solid #ddd", display: "flex", flexDirection: "column", background: "#fafafa" }}>
+            <div style={{ padding: "10px", borderBottom: "1px solid #ddd", fontWeight: "bold", background: "#fff" }}>
+              ⏱ Tempo: {time}s
             </div>
 
-            <div style={{ padding: "10px" }}>
-              <button onClick={() => finishGame(false)}>Submit</button>
-            </div>
+            {gameActive && (
+              <div style={{ padding: "10px", display: "flex", gap: "10px" }}>
+                <button onClick={finishGame} style={{ flex: 1 }}>
+                  Invia
+                </button>
+              </div>
+            )}
 
-            <div
-              style={{
-                flex: 1,
-                overflowY: "auto",
-                padding: "10px",
-              }}
-            >
-              <RouteList
-                segments={network.segments}
-                stations={network.stations}
-                route={route}
-                setRoute={setRoute}
-              />
+            {finishedGame && (
+              <div style={{ padding: "10px" }}>
+                <button onClick={handlePlayAgain} style={{ width: "100%" }}>
+                  Gioca di nuovo
+                </button>
+              </div>
+            )}
+
+            <div style={{ flex: 1, overflowY: "auto", padding: "10px" }}>
+              {gameActive && (
+                <RouteList
+                  segments={network.segments}
+                  stations={network.stations}
+                  route={route}
+                  setRoute={setRoute}
+                />
+              )}
             </div>
           </div>
         </div>

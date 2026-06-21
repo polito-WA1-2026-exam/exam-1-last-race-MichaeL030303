@@ -1,6 +1,6 @@
 import { useState, useContext } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { AuthContext } from "../context/AuthContext.jsx";
+import { AuthContext } from "../context/authContext.jsx";
 import "./Header.css";
 
 export default function Header() {
@@ -22,6 +22,7 @@ export default function Header() {
   <div className="nav-left">
     <Link to="/">Istruzioni</Link>
     {user && <Link to="/home">Home</Link>}
+    {user && <Link to="/ranking">Ranking</Link>}
   </div>
 
   <div className="nav-right">

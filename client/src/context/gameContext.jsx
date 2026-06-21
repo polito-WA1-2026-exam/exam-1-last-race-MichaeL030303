@@ -1,101 +1,104 @@
-import { createContext, useContext, useRef, useState } from "react";
+import { createContext, useContext, useEffect, useRef, useState, useMemo } from "react";
+import { startGame as startGameApi, submitGameApi } from "../utils/api.js";
+import { AuthContext } from "./authContext.jsx";
 
 const GameContext = createContext();
 
 export function GameProvider({ children }) {
+  const auth = useContext(AuthContext);   // 🔥 QUESTO DEVE ESISTERE
+
   const [game, setGame] = useState(null);
+  const [time, setTime] = useState(0);
+  const [phase, setPhase] = useState("idle");
 
-  const [time, setTime] = useState(90);
+  const finishedRef = useRef(false);
+  const timerRef = useRef(null);
 
-  const intervalRef = useRef(null);
-  const finishedRef = useRef(false); // 🔥 BLOCCO ASSOLUTO
+  const STARTING_TIME = 90;
 
   const startGame = async () => {
-    const res = await fetch("http://localhost:3001/api/game/start", {
-      method: "POST",
-      credentials: "include",
-    });
+    if (auth.loading) throw new Error("Auth loading");
+    if (!auth.user) throw new Error("User not authenticated");
 
-    const data = await res.json();
-
-    setGame(data);
-
-    startTimer();
-  };
-
-  const startTimer = () => {
-    setTime(90);
     finishedRef.current = false;
+    setTime(STARTING_TIME);
+    setPhase("playing");
 
-    stopTimer(); // 🔥 SICUREZZA
+    if (timerRef.current) {
+      clearInterval(timerRef.current);
+      timerRef.current = null;
+    }
 
-    intervalRef.current = setInterval(() => {
-      setTime(prev => {
-        if (finishedRef.current) return prev;
+    const newGame = await startGameApi();
+    setGame(newGame);
 
+    timerRef.current = setInterval(() => {
+      setTime((prev) => {
         if (prev <= 1) {
-          finishedRef.current = true;
-          stopTimer();
-          autoFinish();
+          clearInterval(timerRef.current);
+          timerRef.current = null;
+          setPhase("finished");
           return 0;
         }
-
         return prev - 1;
       });
     }, 1000);
+
+    return newGame;
   };
 
-  const stopTimer = () => {
-    if (intervalRef.current) {
-      clearInterval(intervalRef.current);
-      intervalRef.current = null;
-    }
-  };
+const submitGame = async (route) => {
+  if (finishedRef.current) return null;
 
-  const submitGame = async (route) => {
-    if (finishedRef.current) return null;
+  if (!game) throw new Error("No active game");
+  if (!Array.isArray(route) || route.length < 2)
+    throw new Error("Invalid route");
 
-    finishedRef.current = true;
-    stopTimer();
+  finishedRef.current = true;
+  setPhase("finished");
 
-    if (!game) return null;
+  if (timerRef.current) {
+    clearInterval(timerRef.current);
+    timerRef.current = null;
+  }
 
-    const res = await fetch("http://localhost:3001/api/game/submit", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      credentials: "include",
-      body: JSON.stringify({
-        gameId: game.gameId,
-        route,
-      }),
-    });
+  const gameId = game.gameId ?? game.id;
+  const result = await submitGameApi(gameId, route);
 
-    const data = await res.json();
+  setGame(null);
+  return result;
+};
 
-    return data;
-  };
+const resetGame = () => {
+  setGame(null);
+  setTime(0);
+  setPhase("idle");
 
-  const autoFinish = async () => {
-    // 🔥 IMPORTANTE: qui NON deve chiamare startTimer o re-trigger
-    // solo bloccare stato
-    console.log("Game finished by timer");
-  };
+  finishedRef.current = false;
+
+  if (timerRef.current) {
+    clearInterval(timerRef.current);
+    timerRef.current = null;
+  }
+};
 
   return (
-    <GameContext.Provider value={{
-      game,
-      setGame,
-      startGame,
-      submitGame,
-      time,
-      stopTimer,
-      finishedRef
-    }}>
-      {children}
-    </GameContext.Provider>
-  );
+  <GameContext.Provider value={{
+    game,
+    startGame,
+    submitGame,
+    resetGame,
+    time,
+    phase,
+    finishedRef
+  }}>
+    {children}
+  </GameContext.Provider>
+);
 }
 
 export function useGame() {
-  return useContext(GameContext);
+  const ctx = useContext(GameContext);
+  if (!ctx) throw new Error("useGame must be used within GameProvider");
+  return ctx;
 }
