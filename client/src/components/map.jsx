@@ -1,4 +1,4 @@
-function Map({ stations = [], segments = [], lines = [], showLines = true }) {
+function Map({ stations = [], segments = [], lines = [], showLines = true, highlightedRoute = [] }) {
 
   const stationPositions = {
     1: { x: 8, y: 4 },
@@ -37,6 +37,19 @@ function Map({ stations = [], segments = [], lines = [], showLines = true }) {
     return line ? line.color.toLowerCase() : "#999";
   };
 
+  const routeHasEdge = (route, a, b) => {
+    if (!Array.isArray(route)) return false;
+    for (let i = 0; i < route.length - 1; i += 1) {
+      const x = route[i];
+      const y = route[i + 1];
+      if ((x === a && y === b) || (x === b && y === a)) return true;
+    }
+    return false;
+  };
+
+  const stationIsHighlighted = (id) =>
+    highlightedRoute.some((item) => item === id || item?.toString() === id?.toString());  
+
   return (
     <div
       style={{
@@ -49,39 +62,42 @@ function Map({ stations = [], segments = [], lines = [], showLines = true }) {
       }}
     >
 
-      {/* LINEE */}
-      {showLines && (
-        <svg
-          width={TILE_W * 12}
-          height={TILE_H * 10}
-          style={{ position: "absolute", top: 0, left: 0 }}
-        >
-          {segments.map((seg, i) => {
-            const a = getPos(seg.station1);
-            const b = getPos(seg.station2);
+      <svg
+        width={TILE_W * 12}
+        height={TILE_H * 10}
+        style={{ position: "absolute", top: 0, left: 0 }}
+      >
+        {segments.map((seg, i) => {
+          const a = getPos(seg.station1);
+          const b = getPos(seg.station2);
 
-            if (!a || !b) return null;
+          if (!a || !b) return null;
 
-            return (
-              <line
-                key={i}
-                x1={a.x}
-                y1={a.y}
-                x2={b.x}
-                y2={b.y}
-                stroke={getColor(seg.line)}
-                strokeWidth="4"
-                strokeLinecap="round"
-              />
-            );
-          })}
-        </svg>
-      )}
+          const active = routeHasEdge(highlightedRoute, seg.station1, seg.station2);
+
+          return (
+            <line
+              key={i}
+              x1={a.x}
+              y1={a.y}
+              x2={b.x}
+              y2={b.y}
+              stroke={getColor(seg.line)}
+              strokeWidth={active ? 8 : 4}
+              strokeLinecap="round"
+              opacity={active ? 1 : 0}
+            />
+          );
+        })}
+      </svg>
+
 
       {/* STAZIONI */}
       {stations.map(station => {
         const pos = getPos(station.id);
         if (!pos) return null;
+
+        const active = stationIsHighlighted(station.id);
 
         return (
           <div
@@ -95,15 +111,13 @@ function Map({ stations = [], segments = [], lines = [], showLines = true }) {
               zIndex: 2,
             }}
           >
-
-            {/* CERCHIO */}
             <div
               style={{
                 width: 18,
                 height: 18,
                 borderRadius: "50%",
-                background: "#fff",
-                border: "3px solid #000",
+                background: active ? "#ff6600" : "#fff",
+                border: `3px solid ${active ? "#cc5200" : "#000"}`,
                 boxSizing: "border-box",
               }}
               title={station.name}
