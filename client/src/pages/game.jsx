@@ -88,12 +88,15 @@ function Game() {
     })();
   }, []);
 
+const cleanRoute = (r) =>
+  r.filter((x) => x !== null && x !== undefined);
+
   // Initialize route when game starts
   useEffect(() => {
     if (game) {
       const startId = getGameStartId();
       if (startId != null) {
-        setRoute([startId]);
+        setRoute(cleanRoute([startId]));
         setReplayActive(false);
         setReplayEvents([]);
         setReplayStep(-1);
@@ -103,6 +106,13 @@ function Game() {
     }
   }, [game]);
 
+  useEffect(() => {
+  console.log("ROUTE:", route);
+}, [route]);
+
+useEffect(() => {
+  console.log("NETWORK:", network);
+}, [network]);
   // Handle replay auto-advance
   useEffect(() => {
     if (!replayActive || replayEvents.length === 0) return;

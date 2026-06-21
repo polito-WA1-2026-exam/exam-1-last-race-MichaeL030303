@@ -81,7 +81,7 @@ function Map({ stations = [], segments = [], lines = [], showLines = true, highl
       (item) => item === id || item?.toString() === id?.toString()
     );
   };
-
+console.log("STATIONS:", stations);
   const svgWidth = TILE_W * 12;
   const svgHeight = TILE_H * 10;
 
@@ -171,7 +171,7 @@ function Map({ stations = [], segments = [], lines = [], showLines = true, highl
         if (!pos) return null;
 
         const active = stationIsHighlighted(station.id);
-        const stationId = station.id || station.id.toString();
+        const stationId = Number(station.id);
 
         return (
           <div
@@ -219,8 +219,7 @@ function Map({ stations = [], segments = [], lines = [], showLines = true, highl
               {station.name}
             </div>
 
-            {/* Interchange indicator */}
-            {station.interchange && (
+            {Number(station.interchange) === 1 && (
               <div
                 style={{
                   position: "absolute",
@@ -230,35 +229,17 @@ function Map({ stations = [], segments = [], lines = [], showLines = true, highl
                   height: 8,
                   borderRadius: "50%",
                   background: "#ffaa00",
+                  opacity: showLines ? 1 : 0,
                   border: "1px solid #fff",
                   zIndex: 5,
                 }}
-                title="Stazione di interscambio"
               />
             )}
           </div>
         );
       })}
 
-      {/* Legend */}
-      <div
-        style={{
-          position: "absolute",
-          bottom: 10,
-          right: 10,
-          background: "rgba(255, 255, 255, 0.9)",
-          padding: "8px 12px",
-          borderRadius: "4px",
-          fontSize: "9px",
-          border: "1px solid #ddd",
-          zIndex: 20,
-        }}
-      >
-        <div style={{ fontWeight: "bold", marginBottom: "4px" }}>Legenda</div>
-        <div>●&#160; Stazione</div>
-        <div>●&#160; Interchange</div>
-        <div style={{ marginTop: "4px", color: "#ff6600", fontWeight: "bold" }}>Percorso selezionato</div>
-      </div>
+
     </div>
   );
 }

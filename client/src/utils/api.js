@@ -5,142 +5,96 @@ const defaultOptions = {
   headers: { "Content-Type": "application/json" },
 };
 
-const handleResponse = async (res) => {
+async function apiRequest(url, options = {}) {
+  const res = await fetch(`${API_BASE}${url}`, {
+    ...defaultOptions,
+    ...options,
+  });
+
+  if (res.status === 401) {
+    throw new Error("UNAUTHORIZED");
+  }
+
   if (!res.ok) {
-    const error = await res.json().catch(() => ({ error: "Unknown error" }));
+    const error = await res.json().catch(() => ({
+      error: "Unknown error",
+    }));
     throw new Error(error.error || `HTTP ${res.status}`);
   }
-  return res.json();
-};
 
-// Auth endpoints
-export async function logIn(credentials) {
-  try {
-    const res = await fetch(`${API_BASE}/auth/login`, {
-      method: "POST",
-      ...defaultOptions,
-      body: JSON.stringify(credentials),
-    });
-    return handleResponse(res);
-  } catch (error) {
-    console.error("Login error:", error);
-    throw error;
-  }
+  return res.json();
+}
+
+/* =======================
+   AUTH
+======================= */
+
+export async function login(credentials) {
+  return apiRequest("/auth/login", {
+    method: "POST",
+    body: JSON.stringify(credentials),
+  });
 }
 
 export async function getSession() {
   try {
-    const res = await fetch(`${API_BASE}/auth/session`, {
+    return await apiRequest("/auth/session", {
       method: "GET",
-      credentials: "include",
     });
-
-    if (res.status === 401) return null;
-
-    if (!res.ok) throw new Error("Session error");
-
-    return await res.json();
-  } catch (error) {
-    console.error("Session check error:", error);
+  } catch (e) {
+    if (e.message === "UNAUTHORIZED") return null;
     return null;
   }
 }
 
 export async function logOut() {
   try {
-    const res = await fetch(`${API_BASE}/auth/logout`, {
+    await apiRequest("/auth/logout", {
       method: "POST",
-      ...defaultOptions,
     });
-    return res.ok;
-  } catch (error) {
-    console.error("Logout error:", error);
+    return true;
+  } catch {
     return false;
   }
 }
 
-// Game endpoints
+/* =======================
+   GAME
+======================= */
+
 export async function startGame() {
-  try {
-    const res = await fetch(`${API_BASE}/game/start`, {
-      method: "POST",
-      ...defaultOptions,
-    });
-    return handleResponse(res);
-  } catch (error) {
-    console.error("Start game error:", error);
-    throw error;
-  }
+  return apiRequest("/game/start", {
+    method: "POST",
+  });
 }
 
 export async function submitGameApi(gameId, route) {
-  try {
-    if (!gameId || !Array.isArray(route)) {
-      throw new Error("Invalid gameId or route");
-    }
-
-    const res = await fetch(`${API_BASE}/game/submit`, {
-      method: "POST",
-      ...defaultOptions,
-      body: JSON.stringify({ gameId, route }),
-    });
-    return handleResponse(res);
-  } catch (error) {
-    console.error("Submit game error:", error);
-    throw error;
+  if (!gameId || !Array.isArray(route)) {
+    throw new Error("Invalid gameId or route");
   }
+
+  return apiRequest("/game/submit", {
+    method: "POST",
+    body: JSON.stringify({ gameId, route }),
+  });
 }
 
 export async function getMyGames() {
-  try {
-    const res = await fetch(`${API_BASE}/game/my-games`, {
-      method: "GET",
-      ...defaultOptions,
-    });
-    return handleResponse(res);
-  } catch (error) {
-    console.error("Get my games error:", error);
-    throw error;
-  }
+  return apiRequest("/game/my-games");
 }
 
 export async function getGameDetail(gameId) {
-  try {
-    const res = await fetch(`${API_BASE}/game/${gameId}`, {
-      method: "GET",
-      ...defaultOptions,
-    });
-    return handleResponse(res);
-  } catch (error) {
-    console.error("Get game detail error:", error);
-    throw error;
-  }
+  return apiRequest(`/game/${gameId}`);
 }
 
-// Network endpoints
+/* =======================
+   NETWORK / RANKING
+======================= */
+
 export async function getNetwork() {
-  try {
-    const res = await fetch(`${API_BASE}/network`, {
-      method: "GET",
-      ...defaultOptions,
-    });
-    return handleResponse(res);
-  } catch (error) {
-    console.error("Get network error:", error);
-    throw error;
-  }
+  return apiRequest("/network");
 }
 
-// Ranking endpoints
 export async function getRanking() {
-  try {
-    const res = await fetch(`${API_BASE}/ranking`, {
-      method: "GET",
-      ...defaultOptions,
-    });
-    return handleResponse(res);
-  } catch (error) {
-    console.error("Get ranking error:", error);
-    throw error;
-  }
+  return apiRequest("/ranking");
 }
