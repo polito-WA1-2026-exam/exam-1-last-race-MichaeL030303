@@ -128,7 +128,6 @@ Navigation is protected thanks to `ProtectedRoute` components, requiring an acti
 
 ## Screenshot
 
-![Screenshot](./img/home.png)
 ![Screenshot](./img/game.png)
 ![Screenshot](./img/ranking.png)
 
