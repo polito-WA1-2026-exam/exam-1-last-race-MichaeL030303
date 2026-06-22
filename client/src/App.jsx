@@ -5,7 +5,7 @@ import { AuthContext } from "./context/authContext.jsx";
 import Instructions from "./pages/instructions.jsx";
 import Login from "./pages/login.jsx";
 import Game from "./pages/game.jsx";
-import Header from "./components/Header.jsx";
+import Header from "./components/header.jsx";
 import Ranking from "./pages/ranking.jsx";
 
 function ProtectedRoute({ children }) {
