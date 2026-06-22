@@ -5,12 +5,12 @@
 
 ## React Client Application Routes
 
-`/`: Pagina delle istruzioni e introduzione al gioco
-`/login`: Modulo di autenticazione (reindirizza a `/home` se già loggati) 
-`/home`: Area personale: classifica personale, mappa della rete, avvio partita e interfaccia di gioco
-`/game`: Alias di `/home` — stessa pagina di gioco
-`/rankings`: Classifica globale dei top 10 punteggi di tutti i giocatori
-`*`: Qualsiasi route sconosciuta reindirizza a `/`
+`/`: Instructions page
+`/login`: Authentication form (redirects to `/home` if already logged in)
+`/home`: Personal area: personal ranking, network map, game start and game interface
+`/game`: Alias of `/home` — same game page
+`/rankings`: Global ranking of the top 10 scores of all players
+`*`: Any unknown route redirects to `/`
 
 Navigation is protected thanks to `ProtectedRoute` components, requiring an active session, and `LoginRoute` components, blocking access to the login if already authenticated, both defined in `App.jsx`.
 
@@ -169,3 +169,5 @@ I used the AI assistant **Antigravity** (Google DeepMind) for the structured des
 3. **Interactive SVG map**: Restructuring the `Map` component to support interactive clicks, backtracking, glow effect for valid adjacent stations, and the "stations only" mode during the game (without line colors or interchange indicators).
 4. **Design system**: Defining a modern Dark Premium design system with Outfit font, neon purple/yellow palette, glassmorphism, micro-animations, and responsive layout for desktop.
 5. **Flexible submission**: Implementing the ability to submit any route (even incomplete), displaying the "Incomplete Route" message and assigning a score of 0 if the player does not reach the destination.
+
+I used chatGPT to generate the original files and update them if there was an error. I also used it to help me understand the functional requirements of the app.
