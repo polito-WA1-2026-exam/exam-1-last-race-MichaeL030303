@@ -508,16 +508,6 @@ function Game() {
                           <span className="score-val">0</span>
                         </div>
                       </>
-                    ) : invalidReason ? (
-                      <>
-                        <div className="result-icon">❌</div>
-                        <h2>Percorso Non Valido</h2>
-                        <p className="result-desc error-desc">{invalidReason}</p>
-                        <div className="result-score-box error-box">
-                          <span className="score-label">Punteggio Finale</span>
-                          <span className="score-val">0</span>
-                        </div>
-                      </>
                     ) : replayEvents.length > 0 ? (
                       <>
                         <div className="result-icon">🏁</div>
