@@ -20,9 +20,10 @@ export default function Header() {
       <nav className="nav">
 
   <div className="nav-left">
-    <Link to="/">Istruzioni</Link>
-    {user && <Link to="/home">Home</Link>}
-    {user && <Link to="/ranking">Ranking</Link>}
+    <Link to="/" className="nav-logo">🚇 Last Race</Link>
+    <Link to="/" className="nav-link">Istruzioni</Link>
+    {user && <Link to="/home" className="nav-link">Home</Link>}
+    {user && <Link to="/rankings" className="nav-link">Classifica</Link>}
   </div>
 
   <div className="nav-right">

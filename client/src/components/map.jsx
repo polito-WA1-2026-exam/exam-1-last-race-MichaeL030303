@@ -1,6 +1,16 @@
 import React from "react";
 
-function Map({ stations = [], segments = [], lines = [], showLines = true, highlightedRoute = [] }) {
+function Map({
+  stations = [],
+  segments = [],
+  lines = [],
+  showLines = true,
+  highlightedRoute = [],
+  validNextStations = [],
+  onStationClick,
+  startStationId = null,
+  endStationId = null,
+}) {
   const stationPositions = {
     1: { x: 8, y: 4 },
     2: { x: 10, y: 4 },
@@ -35,21 +45,20 @@ function Map({ stations = [], segments = [], lines = [], showLines = true, highl
 
   const getLineColor = (lineId) => {
     const line = lines.find((l) => l.id === lineId);
-    if (!line) return "#999";
+    if (!line) return "#8e8e93";
     
-    // Handle both string and hex color formats
     const color = line.color.toLowerCase();
     const colorMap = {
-      red: "#ff0000",
-      green: "#00aa00",
-      blue: "#0000ff",
-      yellow: "#ffaa00",
-      black: "#000000",
-      purple: "#aa00ff",
-      orange: "#ff6600",
-      pink: "#ff69b4",
-      cyan: "#00ffff",
-      brown: "#8b4513",
+      red: "#ff453a",
+      green: "#30d158",
+      blue: "#0a84ff",
+      yellow: "#ffd60a",
+      black: "#8e8e93",
+      purple: "#bf5af2",
+      orange: "#ff9f0a",
+      pink: "#ff375f",
+      cyan: "#64d2ff",
+      brown: "#ac8e68",
     };
     
     return colorMap[color] || color;
@@ -62,7 +71,6 @@ function Map({ stations = [], segments = [], lines = [], showLines = true, highl
       const x = route[i];
       const y = route[i + 1];
       
-      // Handle both number and string IDs
       if (
         (x === a && y === b) ||
         (x === b && y === a) ||
@@ -81,7 +89,7 @@ function Map({ stations = [], segments = [], lines = [], showLines = true, highl
       (item) => item === id || item?.toString() === id?.toString()
     );
   };
-console.log("STATIONS:", stations);
+
   const svgWidth = TILE_W * 12;
   const svgHeight = TILE_H * 10;
 
@@ -89,15 +97,32 @@ console.log("STATIONS:", stations);
     <div
       style={{
         position: "relative",
-        width: svgWidth,
+        width: "100%",
+        maxWidth: svgWidth,
         height: svgHeight,
         margin: "0 auto",
-        background: "#fafafa",
-        border: "1px solid #ddd",
-        borderRadius: "4px",
+        background: "#0d0e15",
+        border: "1px solid #1f202c",
+        borderRadius: "12px",
         overflow: "hidden",
+        boxShadow: "inset 0 0 40px rgba(0, 0, 0, 0.6)",
       }}
     >
+      {/* Grid Pattern Background */}
+      <div
+        style={{
+          position: "absolute",
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backgroundImage: "radial-gradient(#1f202c 1.5px, transparent 1.5px)",
+          backgroundSize: "20px 20px",
+          opacity: 0.4,
+          pointerEvents: "none",
+        }}
+      />
+
       {/* SVG Lines */}
       <svg
         width={svgWidth}
@@ -110,16 +135,10 @@ console.log("STATIONS:", stations);
         }}
       >
         <defs>
-          <marker
-            id="arrowhead"
-            markerWidth="10"
-            markerHeight="10"
-            refX="9"
-            refY="3"
-            orient="auto"
-          >
-            <polygon points="0 0, 10 3, 0 6" fill="#999" />
-          </marker>
+          <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
+            <feGaussianBlur stdDeviation="3" result="blur" />
+            <feComposite in="SourceGraphic" in2="blur" operator="over" />
+          </filter>
         </defs>
 
         {segments.map((seg, i) => {
@@ -133,32 +152,36 @@ console.log("STATIONS:", stations);
 
           return (
             <g key={i}>
-              {/* Background line for visibility */}
+              {/* Highlight Glow for active route */}
               {active && (
                 <line
                   x1={from.x}
                   y1={from.y}
                   x2={to.x}
                   y2={to.y}
-                  stroke="white"
-                  strokeWidth={active ? 10 : showLines ? 6 : 4}
-                  opacity="0.3"
+                  stroke={color}
+                  strokeWidth="8"
+                  opacity="0.4"
                   strokeLinecap="round"
+                  filter="url(#glow)"
                   pointerEvents="none"
                 />
               )}
 
-              {/* Main line */}
+              {/* Main Line */}
               <line
                 x1={from.x}
                 y1={from.y}
                 x2={to.x}
                 y2={to.y}
-                stroke={color}
-                strokeWidth={active ? 8 : showLines ? 4 : 2}
-                opacity={active || showLines ? 1 : 0}
+                stroke={active || showLines ? color : "none"}
+                strokeWidth={active ? 4 : 3}
+                opacity={active ? 1 : showLines ? 0.7 : 0}
                 strokeLinecap="round"
                 pointerEvents="none"
+                style={{
+                  transition: "stroke-width 0.3s, opacity 0.3s, stroke 0.3s",
+                }}
               />
             </g>
           );
@@ -170,76 +193,146 @@ console.log("STATIONS:", stations);
         const pos = getPos(station.id);
         if (!pos) return null;
 
-        const active = stationIsHighlighted(station.id);
         const stationId = Number(station.id);
+        const active = stationIsHighlighted(stationId);
+        
+        const isStart = startStationId !== null && Number(startStationId) === stationId;
+        const isEnd = endStationId !== null && Number(endStationId) === stationId;
+        const isCurrentEnd =
+          highlightedRoute.length > 0 &&
+          Number(highlightedRoute[highlightedRoute.length - 1]) === stationId;
+
+        const isValidNext = validNextStations.includes(stationId);
+
+        // Styling hierarchy based on station role
+        let circleColor = "#131520";
+        let borderColor = "#3a3f58";
+        let shadowEffect = "none";
+        let scale = "1";
+        let cursor = "default";
+
+        if (isCurrentEnd) {
+          circleColor = "#bf5af2";
+          borderColor = "#bf5af2";
+          shadowEffect = "0 0 15px rgba(191, 90, 242, 0.8), 0 0 5px rgba(191, 90, 242, 0.5)";
+          scale = "1.2";
+          cursor = "pointer";
+        } else if (isStart) {
+          circleColor = active ? "#30d158" : "#131520";
+          borderColor = "#30d158";
+          shadowEffect = "0 0 10px rgba(48, 209, 88, 0.4)";
+          scale = "1.1";
+          cursor = "pointer";
+        } else if (isEnd) {
+          circleColor = active ? "#ff453a" : "#131520";
+          borderColor = "#ff453a";
+          shadowEffect = "0 0 10px rgba(255, 69, 58, 0.4)";
+          scale = "1.1";
+          cursor = "pointer";
+        } else if (active) {
+          circleColor = "#aa3bff";
+          borderColor = "#aa3bff";
+          shadowEffect = "0 0 10px rgba(170, 59, 255, 0.6)";
+        } else if (isValidNext) {
+          circleColor = "#131520";
+          borderColor = "#ffd60a";
+          shadowEffect = "0 0 12px rgba(255, 214, 10, 0.7)";
+          scale = "1.15";
+          cursor = "pointer";
+        }
+
+        const handleStationClick = (e) => {
+          e.stopPropagation();
+          if (onStationClick) {
+            onStationClick(stationId);
+          }
+        };
 
         return (
           <div
             key={stationId}
             style={{
               position: "absolute",
-              left: pos.x - 9,
-              top: pos.y - 9,
-              width: 18,
-              height: 18,
-              zIndex: active ? 10 : 2,
+              left: pos.x - 12,
+              top: pos.y - 12,
+              width: 24,
+              height: 24,
+              zIndex: isCurrentEnd || isValidNext ? 12 : active ? 10 : 2,
+              display: "flex",
+              justifyContent: "center",
+              alignItems: "center",
+              cursor: cursor,
             }}
-            title={station.name}
+            onClick={handleStationClick}
+            title={`${station.name} ${station.interchange ? "(Interscambio)" : ""}`}
           >
-            {/* Station circle */}
+            {/* Station Circle */}
             <div
               style={{
-                width: 18,
-                height: 18,
+                width: 14,
+                height: 14,
                 borderRadius: "50%",
-                background: active ? "#ff6600" : "#fff",
-                border: `3px solid ${active ? "#cc5200" : "#000"}`,
+                background: circleColor,
+                border: `3px solid ${borderColor}`,
                 boxSizing: "border-box",
-                transition: "all 0.2s ease",
-                cursor: "pointer",
-                boxShadow: active ? "0 0 8px rgba(255, 102, 0, 0.5)" : "none",
+                transform: `scale(${scale})`,
+                transition: "all 0.25s cubic-bezier(0.4, 0, 0.2, 1)",
+                boxShadow: shadowEffect,
               }}
             />
 
-            {/* Station label */}
+            {/* Station Label */}
             <div
               style={{
                 position: "absolute",
-                top: 22,
+                top: 24,
                 left: "50%",
                 transform: "translateX(-50%)",
                 fontSize: "10px",
-                fontWeight: "500",
+                fontWeight: isStart || isEnd || active || isValidNext ? "700" : "500",
                 whiteSpace: "nowrap",
-                color: active ? "#ff6600" : "#111",
+                color: isStart
+                  ? "#30d158"
+                  : isEnd
+                  ? "#ff453a"
+                  : isCurrentEnd
+                  ? "#bf5af2"
+                  : isValidNext
+                  ? "#ffd60a"
+                  : active
+                  ? "#aa3bff"
+                  : "#8e8e93",
                 pointerEvents: "none",
-                textShadow: "0 1px 2px rgba(255,255,255,0.8)",
+                textShadow: "0 1px 3px rgba(0,0,0,0.9)",
+                transition: "color 0.2s",
               }}
             >
               {station.name}
+              {isStart && " (P)"}
+              {isEnd && " (A)"}
             </div>
 
-            {Number(station.interchange) === 1 && (
+            {/* Interchange Marker */}
+            {Number(station.interchange) === 1 && showLines && (
               <div
                 style={{
                   position: "absolute",
                   top: -2,
                   right: -2,
-                  width: 8,
-                  height: 8,
+                  width: 7,
+                  height: 7,
                   borderRadius: "50%",
-                  background: "#ffaa00",
-                  opacity: showLines ? 1 : 0,
-                  border: "1px solid #fff",
+                  background: "#ffd60a",
+                  border: "1px solid #0d0e15",
+                  boxShadow: "0 0 4px rgba(255, 214, 10, 0.8)",
                   zIndex: 5,
                 }}
+                title="Stazione di interscambio"
               />
             )}
           </div>
         );
       })}
-
-
     </div>
   );
 }

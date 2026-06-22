@@ -41,73 +41,58 @@ function Ranking() {
   }, []);
 
   return (
-    <div style={{ padding: "20px", maxWidth: "1000px", margin: "0 auto" }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
-        <h1 style={{ margin: 0 }}>Classifica generale</h1>
-        <button onClick={loadRanking} disabled={loading}>
-          {loading ? "Caricamento..." : "Aggiorna"}
+    <div style={{ width: "100%", maxWidth: "900px", margin: "0 auto", padding: "1rem 0" }}>
+      <div className="ranking-title-area">
+        <h1>Classifica Generale</h1>
+        <button 
+          onClick={loadRanking} 
+          disabled={loading}
+          className="btn btn-secondary"
+        >
+          {loading ? "Aggiornamento..." : "🔄 Aggiorna"}
         </button>
       </div>
 
       {error && (
-        <div style={{ padding: "10px", marginBottom: "20px", background: "#fee", border: "1px solid #fcc", borderRadius: "4px", color: "#c00" }}>
-          {error}
+        <div className="login-error" style={{ marginBottom: "1.5rem" }}>
+          ⚠️ {error}
         </div>
       )}
 
       {loading && !ranking.length ? (
-        <div style={{ padding: "20px", textAlign: "center", color: "#666" }}>
-          Caricamento classifica...
+        <div className="spinner-center">
+          <div className="spinner"></div>
         </div>
       ) : ranking.length === 0 ? (
-        <div style={{ padding: "20px", textAlign: "center", color: "#666" }}>
-          Nessun risultato disponibile
+        <div className="card" style={{ padding: "3rem", textAlign: "center", color: "var(--text-secondary)" }}>
+          Nessuna corsa registrata al momento. Sii il primo a correre!
         </div>
       ) : (
-        <div style={{ overflowX: "auto" }}>
-          <table
-            style={{
-              width: "100%",
-              borderCollapse: "collapse",
-              background: "#fff",
-              border: "1px solid #ddd",
-              borderRadius: "4px",
-              overflow: "hidden",
-            }}
-          >
+        <div className="ranking-table-container">
+          <table className="ranking-table">
             <thead>
-              <tr style={{ background: "#f5f5f5", borderBottom: "2px solid #ddd" }}>
-                <th style={{ padding: "12px", textAlign: "center", fontWeight: "bold" }}>#</th>
-                <th style={{ padding: "12px", textAlign: "left", fontWeight: "bold" }}>Giocatore</th>
-                <th style={{ padding: "12px", textAlign: "right", fontWeight: "bold" }}>Punteggio</th>
-                <th style={{ padding: "12px", textAlign: "right", fontWeight: "bold" }}>Data</th>
+              <tr>
+                <th className="ranking-col-rank">#</th>
+                <th>Macchinista</th>
+                <th style={{ textAlign: "right" }}>Punti</th>
+                <th style={{ textAlign: "right" }}>Data Corsa</th>
               </tr>
             </thead>
             <tbody>
               {ranking.map((item, index) => {
                 const date = parseUTC(item.created_at);
-                const isEvenRow = index % 2 === 0;
                 return (
-                  <tr
-                    key={`${item.id}-${index}`}
-                    style={{
-                      background: isEvenRow ? "#fafafa" : "#fff",
-                      borderBottom: "1px solid #eee",
-                      transition: "background 0.2s",
-                    }}
-                    onMouseEnter={(e) => (e.currentTarget.style.background = "#f0f0f0")}
-                    onMouseLeave={(e) => (e.currentTarget.style.background = isEvenRow ? "#fafafa" : "#fff")}
-                  >
-                    <td style={{ padding: "12px", textAlign: "center", fontWeight: "bold", color: "#666" }}>
+                  <tr key={`${item.id}-${index}`}>
+                    <td className="ranking-col-rank">
                       {index + 1}
                     </td>
-                    <td style={{ padding: "12px", textAlign: "left" }}>
-                      {item.username || "Anonimo"}
+                    <td className="ranking-col-player">
+                      👤 {item.username || "Anonimo"}
                     </td>
-                    <td style={{ padding: "12px", textAlign: "right", fontWeight: "bold", color: "#0066cc" }}>
-                      {item.score ?? 0}
+                    <td className="ranking-col-score" style={{ textAlign: "right" }}>
+                      {item.score ?? 0} pt
                     </td>
-                    <td style={{ padding: "12px", textAlign: "right", color: "#666", fontSize: "0.9em" }}>
+                    <td className="ranking-col-date" style={{ textAlign: "right" }}>
                       {date ? date.toLocaleString("it-IT") : "Data sconosciuta"}
                     </td>
                   </tr>

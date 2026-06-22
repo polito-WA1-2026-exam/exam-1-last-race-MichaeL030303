@@ -24,15 +24,19 @@ function Game() {
   const [submittedRoute, setSubmittedRoute] = useState([]);
   const [replayActive, setReplayActive] = useState(false);
   const [globalRanking, setGlobalRanking] = useState([]);
+  const [warning, setWarning] = useState("");
+  const [timeoutOccurred, setTimeoutOccurred] = useState(false);
+  const [incompleteRoute, setIncompleteRoute] = useState(false);
+
   const [network, setNetwork] = useState({
     stations: [],
     segments: [],
     lines: [],
   });
-  const { user, loading } = useContext(AuthContext);
+  const { user } = useContext(AuthContext);
 
   const gameActive = phase === "playing" && !!game;
-  const gameStarted = (!!game && phase !== "idle") || replayActive;
+  const gameStarted = (!!game && phase !== "idle") || replayActive || finishedGame || timeoutOccurred;
 
   // Resolve station ID from various property names
   const resolveStationId = (value) => {
@@ -44,17 +48,17 @@ function Game() {
   const getGameStartId = () =>
     resolveStationId(
       game?.startStation?.id ??
-        game?.start_station ??
-        game?.startStation ??
-        game?.from
+      game?.start_station ??
+      game?.startStation ??
+      game?.from
     );
 
   const getGameEndId = () =>
     resolveStationId(
       game?.endStation?.id ??
-        game?.end_station ??
-        game?.endStation ??
-        game?.to
+      game?.end_station ??
+      game?.endStation ??
+      game?.to
     );
 
   const getStationName = (id) => {
@@ -62,7 +66,7 @@ function Game() {
     const station = network.stations.find(
       (s) => s.id === stationId || s.id?.toString() === stationId?.toString()
     );
-    return station?.name || `Station ${stationId}`;
+    return station?.name || `Stazione ${stationId}`;
   };
 
   // Load network and past games on mount
@@ -88,8 +92,8 @@ function Game() {
     })();
   }, []);
 
-const cleanRoute = (r) =>
-  r.filter((x) => x !== null && x !== undefined);
+  const cleanRoute = (r) =>
+    r.filter((x) => x !== null && x !== undefined);
 
   // Initialize route when game starts
   useEffect(() => {
@@ -102,17 +106,13 @@ const cleanRoute = (r) =>
         setReplayStep(-1);
         setSubmittedRoute([]);
         setFinishedGame(false);
+        setTimeoutOccurred(false);
+        setIncompleteRoute(false);
+        setWarning("");
       }
     }
   }, [game]);
 
-  useEffect(() => {
-  console.log("ROUTE:", route);
-}, [route]);
-
-useEffect(() => {
-  console.log("NETWORK:", network);
-}, [network]);
   // Handle replay auto-advance
   useEffect(() => {
     if (!replayActive || replayEvents.length === 0) return;
@@ -136,6 +136,129 @@ useEffect(() => {
     return () => clearTimeout(timer);
   }, [replayActive, replayStep, replayEvents.length]);
 
+  // Check for timeout
+  useEffect(() => {
+    if (gameActive && time === 0) {
+      setTimeoutOccurred(true);
+      setFinishedGame(true);
+      setRoute([]);
+    }
+  }, [time, gameActive]);
+
+  // Calculate next valid stations in real-time
+  const getValidNextStations = () => {
+    if (!gameActive || !game || network.stations.length === 0) return [];
+    if (route.length === 0) {
+      const startId = getGameStartId();
+      return startId != null ? [Number(startId)] : [];
+    }
+
+    const last = Number(route[route.length - 1]);
+
+    // Find all segments connected to the last station in our route
+    const adjacentSegments = network.segments.filter(
+      (seg) => Number(seg.station1) === last || Number(seg.station2) === last
+    );
+
+    const validNexts = [];
+
+    for (const seg of adjacentSegments) {
+      const nextStationId = Number(seg.station1) === last ? Number(seg.station2) : Number(seg.station1);
+
+      // Rule 1: Segment must not be used already in the route in either direction
+      let segmentUsed = false;
+      for (let i = 0; i < route.length - 1; i++) {
+        const r1 = Number(route[i]);
+        const r2 = Number(route[i + 1]);
+        if ((r1 === last && r2 === nextStationId) || (r1 === nextStationId && r2 === last)) {
+          segmentUsed = true;
+          break;
+        }
+      }
+      if (segmentUsed) continue;
+
+      // Rule 2: Line change check
+      if (route.length >= 2) {
+        const secondLast = Number(route[route.length - 2]);
+
+        // Find previous segment to see its line
+        const prevSeg = network.segments.find(
+          (s) =>
+            (Number(s.station1) === secondLast && Number(s.station2) === last) ||
+            (Number(s.station2) === secondLast && Number(s.station1) === last)
+        );
+
+        const prevLine = prevSeg ? prevSeg.line : null;
+        const nextLine = seg.line;
+
+        if (prevLine !== null && prevLine !== nextLine) {
+          // Line change detected! 'last' station must be an interchange station
+          const lastStation = network.stations.find((s) => Number(s.id) === last);
+          const isInterchange =
+            lastStation &&
+            (Number(lastStation.interchange) === 1 || lastStation.interchange === true);
+
+          if (!isInterchange) {
+            continue; // Line changes only at interchange stations
+          }
+        }
+      }
+
+      validNexts.push(nextStationId);
+    }
+
+    return validNexts;
+  };
+
+  // Handle clicking a station on the map or connection buttons
+  const handleStationClick = (stationId) => {
+    if (!gameActive) return;
+    const startId = Number(getGameStartId());
+    const targetId = Number(stationId);
+
+    const lastSelected = route.length > 0 ? Number(route[route.length - 1]) : null;
+
+    if (targetId === lastSelected) {
+      // Clicked current position: remove last step if route has more than just the start station
+      if (route.length > 1) {
+        setRoute(route.slice(0, -1));
+        setWarning("");
+      }
+      return;
+    }
+
+    const validNexts = getValidNextStations();
+    if (validNexts.includes(targetId)) {
+      setRoute([...route, targetId]);
+      setWarning("");
+      return;
+    }
+
+    // Check for backtracking (clicking on a station already in the path)
+    const indexInRoute = route.lastIndexOf(targetId);
+    if (indexInRoute >= 0 && indexInRoute < route.length - 1) {
+      setRoute(route.slice(0, indexInRoute + 1));
+      setWarning("");
+      return;
+    }
+
+    // Invalid click: explain why to the user
+    // Is it adjacent but line change not allowed?
+    const isAdjacent = network.segments.some(
+      (seg) =>
+        (Number(seg.station1) === lastSelected && Number(seg.station2) === targetId) ||
+        (Number(seg.station2) === lastSelected && Number(seg.station1) === targetId)
+    );
+
+    if (isAdjacent) {
+      setWarning("Cambio linea non consentito: questa non è una stazione di interscambio!");
+    } else {
+      setWarning("Seleziona solo stazioni adiacenti collegate da una linea!");
+    }
+
+    setTimeout(() => setWarning(""), 4000);
+  };
+
   const handleStartGame = async () => {
     try {
       setMapOpen(false);
@@ -145,10 +268,13 @@ useEffect(() => {
       setReplayEvents([]);
       setReplayStep(-1);
       setSubmittedRoute([]);
+      setTimeoutOccurred(false);
+      setIncompleteRoute(false);
+      setWarning("");
       await startGame();
     } catch (error) {
       console.error("Failed to start game:", error);
-      alert("Failed to start game");
+      alert("Impossibile avviare il gioco");
     }
   };
 
@@ -164,8 +290,25 @@ useEffect(() => {
 
   const finishGame = async () => {
     try {
-      if (!route || route.length < 2) {
-        alert("Seleziona un percorso valido prima del submit");
+      const endId = Number(getGameEndId());
+
+      // Allow submit even with incomplete route
+      const isComplete =
+        route && route.length >= 2 && Number(route[route.length - 1]) === endId;
+
+      if (!isComplete) {
+        // Incomplete route: submit to server anyway (server will record score 0)
+        if (!game) return;
+        setMapOpen(false);
+        setIncompleteRoute(true);
+        setFinishedGame(true);
+        // Still call the API so the game is recorded with 0 points
+        try {
+          await submitGame(route && route.length >= 2 ? route : [getGameStartId()]);
+        } catch (_) {
+          // ignore submit error for incomplete routes
+        }
+        await refreshRankings();
         return;
       }
 
@@ -185,7 +328,7 @@ useEffect(() => {
       }
 
       if (!data.valid) {
-        alert(`Invalid route: ${data.reason}`);
+        setIncompleteRoute(false);
         setFinishedGame(true);
         setRoute([]);
         await refreshRankings();
@@ -193,6 +336,7 @@ useEffect(() => {
       }
 
       // Valid route: prepare replay
+      setIncompleteRoute(false);
       setSubmittedRoute(route);
       setReplayEvents(data.events || []);
       setReplayStep(0);
@@ -215,9 +359,12 @@ useEffect(() => {
     setReplayStep(-1);
     setSubmittedRoute([]);
     setMapOpen(false);
+    setTimeoutOccurred(false);
+    setIncompleteRoute(false);
+    setWarning("");
   };
 
-  const highlightedRoute = replayActive ? submittedRoute.slice(0, replayStep + 2) : [];
+  const highlightedRoute = replayActive ? submittedRoute.slice(0, replayStep + 2) : route;
   const currentEvent = replayActive && replayStep >= 0 ? replayEvents[replayStep] : null;
   const startId = getGameStartId();
   const endId = getGameEndId();
@@ -225,106 +372,220 @@ useEffect(() => {
   return (
     <div className="game-page">
       {!gameStarted && (
-        <>
-          <div style={{ marginBottom: "20px", padding: "10px", border: "1px solid #ddd", borderRadius: "8px", background: "#fff" }}>
-            <h2 style={{ margin: "0 0 10px" }}>Classifica personale</h2>
-
+        <div className="dashboard-grid">
+          {/* Personal Scores Card */}
+          <div className="card dashboard-card">
+            <h2 className="card-title">Classifica Personale</h2>
             {loadingPastGames ? (
-              <p>Caricamento...</p>
+              <div className="spinner-center"><div className="spinner"></div></div>
             ) : pastGames.length > 0 ? (
-              <ol style={{ margin: 0, paddingLeft: "20px" }}>
-                {pastGames.slice(0, 10).map((gameItem) => {
+              <div className="list-scores">
+                {pastGames.slice(0, 10).map((gameItem, idx) => {
                   const date = parseUTC(gameItem.created_at);
                   return (
-                    <li key={gameItem.id}>
-                      {date ? date.toLocaleString() : "Data sconosciuta"}: {gameItem.score} punti
-                    </li>
+                    <div key={gameItem.id} className="score-item">
+                      <div className="score-rank">#{idx + 1}</div>
+                      <div className="score-details">
+                        <div className="score-date">
+                          {date ? date.toLocaleString("it-IT") : "Data sconosciuta"}
+                        </div>
+                      </div>
+                      <div className="score-value">{gameItem.score} pt</div>
+                    </div>
                   );
                 })}
-              </ol>
+              </div>
             ) : (
-              <p>Nessun gioco passato</p>
+              <p className="no-data">Nessuna partita giocata. Inizia una nuova partita ora!</p>
             )}
           </div>
 
-          <div style={{ display: "flex", gap: "10px", marginBottom: "20px" }}>
-            <button onClick={() => setMapOpen((open) => !open)}>
-              {mapOpen ? "Chiudi Map" : "Apri Map"}
-            </button>
-            <button onClick={handleStartGame}>Inizia Gioco</button>
-          </div>
-
-          {mapOpen && (
-            <div style={{ marginTop: "20px", padding: "10px", border: "1px solid #ddd", borderRadius: "8px", background: "#fff" }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "10px" }}>
-                <h3 style={{ margin: 0 }}>Mappa</h3>
-                <button onClick={() => setMapOpen(false)}>Chiudi</button>
-              </div>
-              <div style={{ width: "100%", height: "500px" }}>
-                <Map stations={network.stations} segments={network.segments} lines={network.lines} showLines={true} />
-              </div>
+          {/* Quick Play Card */}
+          <div className="card dashboard-card play-card">
+            <h2 className="card-title">Sei pronto per la corsa?</h2>
+            <p className="card-desc">
+              Pianifica il tragitto metropolitano più efficiente dalla partenza all'arrivo.
+              Ogni fermata riserva eventi imprevisti! Hai 90 secondi.
+            </p>
+            <div className="dashboard-buttons">
+              <button className="btn btn-secondary" onClick={() => setMapOpen((open) => !open)}>
+                {mapOpen ? "Nascondi Mappa" : "Visualizza Rete"}
+              </button>
+              <button className="btn btn-primary" onClick={handleStartGame}>Nuova Partita 🚀</button>
             </div>
-          )}
-        </>
+
+            {mapOpen && (
+              <div className="map-modal-container">
+                <div style={{ width: "100%", height: "420px", marginTop: "15px" }}>
+                  <Map
+                    stations={network.stations}
+                    segments={network.segments}
+                    lines={network.lines}
+                    showLines={true}
+                  />
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
       )}
 
       {gameStarted && (
-        <div style={{ display: "flex", width: "100%", height: "calc(100vh - 80px)" }}>
-          <div style={{ flex: 3, minHeight: 0, display: "flex", flexDirection: "column", justifyContent: "center", alignItems: "stretch", overflow: "hidden", position: "relative" }}>
-            <div style={{ width: "100%", padding: "10px", background: "#fff", borderBottom: "1px solid #ddd" }}>
-              <strong>Partenza:</strong> {startId ? getStationName(startId) : "?"} • <strong>Arrivo:</strong> {endId ? getStationName(endId) : "?"}
+        <div className="game-workspace">
+          {/* Main Map Panel */}
+          <div className="map-panel">
+            <div className="hud-header">
+              <div className="hud-info">
+                <strong>Partenza:</strong> <span className="hud-station start">{startId ? getStationName(startId) : "?"}</span>
+                <span className="hud-arrow">→</span>
+                <strong>Arrivo:</strong> <span className="hud-station end">{endId ? getStationName(endId) : "?"}</span>
+              </div>
+              <div className={`hud-timer ${time <= 15 ? "timer-low" : ""}`}>
+                ⏱ {time}s
+              </div>
             </div>
 
-            <div style={{ position: "relative", flex: 1, minHeight: 0 }}>
+            {/* Warning Toast message if any */}
+            {warning && <div className="warning-toast">{warning}</div>}
+
+            <div className="map-canvas-container">
               <Map
                 stations={network.stations}
                 segments={network.segments}
                 lines={network.lines}
                 showLines={false}
                 highlightedRoute={highlightedRoute}
+                validNextStations={gameActive ? getValidNextStations() : []}
+                onStationClick={gameActive ? handleStationClick : null}
+                startStationId={startId}
+                endStationId={endId}
               />
 
+              {/* Step replay overlay */}
               {currentEvent && (
-                <div style={{ position: "absolute", top: 12, left: 12, padding: "12px", borderRadius: "10px", background: "rgba(0,0,0,0.8)", color: "#fff", maxWidth: "320px", zIndex: 5 }}>
-                  <div style={{ fontWeight: "bold", marginBottom: "6px" }}>
-                    Evento {replayStep + 1} / {replayEvents.length}
+                <div className="event-toast">
+                  <div className="event-badge">Evento {replayStep + 1} / {replayEvents.length}</div>
+                  <div className="event-description">{currentEvent.description || "Segmento completato"}</div>
+                  <div className={`event-points ${currentEvent.points >= 0 ? "positive" : "negative"}`}>
+                    {currentEvent.points >= 0 ? `+${currentEvent.points}` : currentEvent.points} pt
                   </div>
-                  <div>{currentEvent.description || "Azione completata"}</div>
-                  <div style={{ marginTop: "8px", fontWeight: "bold" }}>{currentEvent.points ?? 0} punti</div>
+                </div>
+              )}
+
+              {/* ⏰ Timeout popup */}
+              {timeoutOccurred && (
+                <div className="result-overlay">
+                  <div className="result-card">
+                    <div className="result-icon">⏰</div>
+                    <h2>Tempo Scaduto!</h2>
+                    <p className="result-desc error-desc">
+                      Non hai completato la rotta entro 90 secondi.<br />
+                      <strong>Hai perso tutti i punti.</strong>
+                    </p>
+                    <div className="result-score-box error-box">
+                      <span className="score-label">Punteggio Finale</span>
+                      <span className="score-val">0</span>
+                    </div>
+                    <button className="btn btn-primary" onClick={handlePlayAgain}>Gioca Ancora</button>
+                  </div>
+                </div>
+              )}
+
+              {/* 🏁 Game Result popup (incomplete / invalid / success) */}
+              {finishedGame && !replayActive && !timeoutOccurred && (
+                <div className="result-overlay">
+                  <div className="result-card">
+                    {incompleteRoute ? (
+                      <>
+                        <div className="result-icon">⚠️</div>
+                        <h2>Rotta Incompleta!</h2>
+                        <p className="result-desc error-desc">
+                          Non hai raggiunto la stazione di arrivo.<br />
+                          <strong>Hai perso tutti i punti.</strong>
+                        </p>
+                        <div className="result-score-box error-box">
+                          <span className="score-label">Punteggio Finale</span>
+                          <span className="score-val">0</span>
+                        </div>
+                      </>
+                    ) : invalidReason ? (
+                      <>
+                        <div className="result-icon">❌</div>
+                        <h2>Percorso Non Valido</h2>
+                        <p className="result-desc error-desc">{invalidReason}</p>
+                        <div className="result-score-box error-box">
+                          <span className="score-label">Punteggio Finale</span>
+                          <span className="score-val">0</span>
+                        </div>
+                      </>
+                    ) : replayEvents.length > 0 ? (
+                      <>
+                        <div className="result-icon">🏁</div>
+                        <h2>Fine Corsa!</h2>
+                        <p className="result-desc">Tragitto completato con successo.</p>
+                        <div className="result-score-box">
+                          <span className="score-label">Punteggio Finale</span>
+                          <span className="score-val">
+                            {replayEvents.reduce((acc, curr) => acc + (curr.points ?? 0), 20)}
+                          </span>
+                        </div>
+                      </>
+                    ) : (
+                      <>
+                        <div className="result-icon">❌</div>
+                        <h2>Percorso Non Valido</h2>
+                        <p className="result-desc error-desc">Il percorso pianificato non era valido.</p>
+                        <div className="result-score-box error-box">
+                          <span className="score-label">Punteggio Finale</span>
+                          <span className="score-val">0</span>
+                        </div>
+                      </>
+                    )}
+                    <button className="btn btn-primary" onClick={handlePlayAgain}>Gioca Ancora</button>
+                  </div>
                 </div>
               )}
             </div>
           </div>
 
-          <div style={{ flex: 1, minHeight: 0, borderLeft: "1px solid #ddd", display: "flex", flexDirection: "column", background: "#fafafa" }}>
-            <div style={{ padding: "10px", borderBottom: "1px solid #ddd", fontWeight: "bold", background: "#fff" }}>
-              ⏱ Tempo: {time}s
-            </div>
-
+          {/* Right Sidebar Route Planning Panel */}
+          <div className="planner-sidebar">
             {gameActive && (
-              <div style={{ padding: "10px", display: "flex", gap: "10px" }}>
-                <button onClick={finishGame} style={{ flex: 1 }}>
-                  Invia
+              <div className="sidebar-hud">
+                <button
+                  onClick={finishGame}
+                  className="btn btn-success btn-block"
+                  style={{ fontSize: "16px", fontWeight: "bold" }}
+                >
+                  🚀 Invia Percorso
                 </button>
               </div>
             )}
 
-            {finishedGame && (
-              <div style={{ padding: "10px" }}>
-                <button onClick={handlePlayAgain} style={{ width: "100%" }}>
-                  Gioca di nuovo
-                </button>
-              </div>
-            )}
-
-            <div style={{ flex: 1, overflowY: "auto", padding: "10px" }}>
+            <div className="sidebar-content">
               {gameActive && (
                 <RouteList
                   segments={network.segments}
                   stations={network.stations}
+                  lines={network.lines}
                   route={route}
                   setRoute={setRoute}
+                  validNextStations={getValidNextStations()}
+                  onStationClick={handleStationClick}
+                  startStationId={startId}
+                  endStationId={endId}
+                  onSegmentWarning={setWarning}
                 />
+              )}
+
+              {replayActive && (
+                <div className="replay-hud">
+                  <h3>Simulazione Corsa</h3>
+                  <p>Stiamo guidando il treno lungo il percorso pianificato. Osserva gli eventi sulla sinistra...</p>
+                  <div className="replay-progress">
+                    <div className="progress-bar-fill" style={{ width: `${((replayStep + 1) / replayEvents.length) * 100}%` }}></div>
+                  </div>
+                </div>
               )}
             </div>
           </div>

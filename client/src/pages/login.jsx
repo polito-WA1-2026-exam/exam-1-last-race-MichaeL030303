@@ -18,10 +18,8 @@ function Login() {
         throw new Error("AuthContext not ready");
       }
 
-      // 🔥 SOLO QUESTO (niente API diretta)
       await auth.login({ username, password });
-
-      navigate("/game");
+      navigate("/home");
     } catch (err) {
       console.error(err);
       setErrorMsg("Username o password errati");
@@ -29,27 +27,50 @@ function Login() {
   };
 
   return (
-    <div>
-      <h1>Login</h1>
+    <div className="login-page-container">
+      <div className="card login-card">
+        <div className="login-header">
+          <h1>Benvenuto Conduttore</h1>
+          <p>Inserisci le tue credenziali per avviare il treno</p>
+        </div>
 
-      {errorMsg && <p style={{ color: "red" }}>{errorMsg}</p>}
+        {errorMsg && (
+          <div className="login-error">
+            ⚠️ {errorMsg}
+          </div>
+        )}
 
-      <form onSubmit={handleSubmit}>
-        <input
-          placeholder="username"
-          value={username}
-          onChange={(e) => setUsername(e.target.value)}
-        />
+        <form onSubmit={handleSubmit}>
+          <div className="form-group">
+            <label htmlFor="username-input">Username</label>
+            <input
+              id="username-input"
+              className="form-control"
+              placeholder="Esempio: Mario"
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
+              required
+            />
+          </div>
 
-        <input
-          placeholder="password"
-          type="password"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-        />
+          <div className="form-group">
+            <label htmlFor="password-input">Password</label>
+            <input
+              id="password-input"
+              type="password"
+              className="form-control"
+              placeholder="••••••••"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              required
+            />
+          </div>
 
-        <button>Login</button>
-      </form>
+          <button className="btn btn-primary btn-block" style={{ marginTop: "1.5rem" }}>
+            Accedi al Deposito 🚇
+          </button>
+        </form>
+      </div>
     </div>
   );
 }
