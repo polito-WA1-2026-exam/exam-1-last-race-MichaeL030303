@@ -5,14 +5,14 @@
 
 ## React Client Application Routes
 
-`/`: Instructions page
-`/login`: Authentication form (redirects to `/home` if already logged in)
-`/home`: Personal area: personal ranking, network map, game start and game interface
-`/game`: Alias of `/home` — same game page
-`/rankings`: Global ranking of the top 10 scores of all players
-`*`: Any unknown route redirects to `/`
-
-Navigation is protected thanks to `ProtectedRoute` components, requiring an active session, and `LoginRoute` components, blocking access to the login if already authenticated, both defined in `App.jsx`.
+`/`: Instructions page   
+`/login`: Authentication form (redirects to `/home` if already logged in)   
+`/home`: Personal area: personal ranking, network map, game start and game interface   
+`/game`: Alias of `/home` — same game page   
+`/rankings`: Global ranking of the top 10 scores of all players   
+`*`: Any unknown route redirects to `/`   
+   
+Navigation is protected thanks to `ProtectedRoute` components, requiring an active session, and `LoginRoute` components, blocking    access to the login if already authenticated, both defined in `App.jsx`.   
 
 ---
 
@@ -128,7 +128,9 @@ Navigation is protected thanks to `ProtectedRoute` components, requiring an acti
 
 ## Screenshot
 
-![Screenshot](./img/map.jpg)
+![Screenshot](./img/home.png)
+![Screenshot](./img/game.png)
+![Screenshot](./img/ranking.png)
 
 ---
 
