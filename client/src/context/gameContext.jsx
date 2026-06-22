@@ -1,104 +1,141 @@
-import { createContext, useContext, useEffect, useRef, useState, useMemo } from "react";
-import { startGame as startGameApi, submitGameApi } from "../utils/api.js";
-import { AuthContext } from "./authContext.jsx";
+import { createContext, useContext, useRef, useState } from "react";
 
 const GameContext = createContext();
 
 export function GameProvider({ children }) {
-  const auth = useContext(AuthContext);   // 🔥 QUESTO DEVE ESISTERE
-
   const [game, setGame] = useState(null);
-  const [time, setTime] = useState(0);
-  const [phase, setPhase] = useState("idle");
+  const [time, setTime] = useState(90);
+  const [phase, setPhase] = useState("idle"); 
+  // idle | playing | finished
 
+  const intervalRef = useRef(null);
   const finishedRef = useRef(false);
-  const timerRef = useRef(null);
 
-  const STARTING_TIME = 90;
-
+  // ================= START GAME =================
   const startGame = async () => {
-    if (auth.loading) throw new Error("Auth loading");
-    if (!auth.user) throw new Error("User not authenticated");
+    try {
+      setPhase("playing");
+      setTime(90);
+      finishedRef.current = false;
 
-    finishedRef.current = false;
-    setTime(STARTING_TIME);
-    setPhase("playing");
+      stopTimer();
 
-    if (timerRef.current) {
-      clearInterval(timerRef.current);
-      timerRef.current = null;
+      const res = await fetch("http://localhost:3001/api/game/start", {
+        method: "POST",
+        credentials: "include",
+      });
+
+      const data = await res.json();
+
+      setGame(data);
+
+      startTimer();
+      return data;
+    } catch (err) {
+      console.error("startGame error:", err);
+      setPhase("idle");
     }
+  };
 
-    const newGame = await startGameApi();
-    setGame(newGame);
+  // ================= TIMER =================
+  const startTimer = () => {
+    stopTimer();
 
-    timerRef.current = setInterval(() => {
+    intervalRef.current = setInterval(() => {
       setTime((prev) => {
+        if (finishedRef.current) return prev;
+
         if (prev <= 1) {
-          clearInterval(timerRef.current);
-          timerRef.current = null;
-          setPhase("finished");
+          finishByTimer();
           return 0;
         }
+
         return prev - 1;
       });
     }, 1000);
-
-    return newGame;
   };
 
-const submitGame = async (route) => {
-  if (finishedRef.current) return null;
+  const stopTimer = () => {
+    if (intervalRef.current) {
+      clearInterval(intervalRef.current);
+      intervalRef.current = null;
+    }
+  };
 
-  if (!game) throw new Error("No active game");
-  if (!Array.isArray(route) || route.length < 2)
-    throw new Error("Invalid route");
+  // ================= SUBMIT GAME =================
+  const submitGame = async (route) => {
+    if (finishedRef.current) return null;
+    if (!game) return null;
 
-  finishedRef.current = true;
-  setPhase("finished");
+    finishedRef.current = true;
+    stopTimer();
 
-  if (timerRef.current) {
-    clearInterval(timerRef.current);
-    timerRef.current = null;
-  }
+    setPhase("finished");
 
-  const gameId = game.gameId ?? game.id;
-  const result = await submitGameApi(gameId, route);
+    try {
+      const res = await fetch("http://localhost:3001/api/game/submit", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({
+          gameId: game.gameId ?? game.id,
+          route,
+        }),
+      });
 
-  setGame(null);
-  return result;
-};
+      const data = await res.json();
 
-const resetGame = () => {
-  setGame(null);
-  setTime(0);
-  setPhase("idle");
+      setGame(null);
+      return data;
+    } catch (err) {
+      console.error("submitGame error:", err);
+      return null;
+    }
+  };
 
-  finishedRef.current = false;
+  // ================= TIMER END =================
+  const finishByTimer = () => {
+    if (finishedRef.current) return;
 
-  if (timerRef.current) {
-    clearInterval(timerRef.current);
-    timerRef.current = null;
-  }
-};
+    finishedRef.current = true;
+    stopTimer();
+
+    setPhase("finished");
+    setGame(null);
+  };
+
+  // ================= RESET =================
+  const resetGame = () => {
+    stopTimer();
+    setGame(null);
+    setTime(90);
+    setPhase("idle");
+    finishedRef.current = false;
+  };
 
   return (
-  <GameContext.Provider value={{
-    game,
-    startGame,
-    submitGame,
-    resetGame,
-    time,
-    phase,
-    finishedRef
-  }}>
-    {children}
-  </GameContext.Provider>
-);
+    <GameContext.Provider
+      value={{
+        game,
+        setGame,
+        time,
+        phase,
+
+        startGame,
+        submitGame,
+        resetGame,
+
+        finishedRef,
+      }}
+    >
+      {children}
+    </GameContext.Provider>
+  );
 }
 
+// ✅ FIX ERRORE IMPORT (QUESTO era il tuo problema)
 export function useGame() {
   const ctx = useContext(GameContext);
-  if (!ctx) throw new Error("useGame must be used within GameProvider");
+  if (!ctx) throw new Error("useGame must be used inside GameProvider");
   return ctx;
 }
