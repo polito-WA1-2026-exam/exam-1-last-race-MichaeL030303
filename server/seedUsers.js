@@ -1,31 +1,23 @@
+// filepath: server/seedUsers.js
 import Database from "better-sqlite3";
 import bcrypt from "bcrypt";
 
 const db = new Database("lastrace.db");
-
 const users = [
-  ["Mario", "abc1"],
-  ["Paola", "abc2"],
-  ["Andrea", "abc3"]
+  { username: "Mario", password: "abc1" },
+  { username: "Paola", password: "abc2" },
+  { username: "Andrea", password: "abc3" },
 ];
 
-const userStmt = db.prepare(
-  "INSERT OR IGNORE INTO users (username, password) VALUES (?, ?)"
-);
+const insert = db.prepare("INSERT OR IGNORE INTO users (username, password) VALUES (?, ?)");
 
-for (const [username, password] of users) {
-  const hash = bcrypt.hashSync(password, 10);
-  userStmt.run(username, hash);
-}
-
-const mario = db.prepare(
-  "SELECT id FROM users WHERE username=?"
-).get("Mario");
-
-const paola = db.prepare(
-  "SELECT id FROM users WHERE username=?"
-).get("Paola");
-
+(async () => {
+  for (const u of users) {
+    const hash = await bcrypt.hash(u.password, 10);
+    insert.run(u.username, hash);
+  }
+  console.log("seed users done");
+})();
 const gameStmt = db.prepare(`
   INSERT OR IGNORE INTO games
   (user_id, score, start_station, end_station, finished, created_at)

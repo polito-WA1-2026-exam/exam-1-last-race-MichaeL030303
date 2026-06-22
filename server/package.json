@@ -1,15 +1,24 @@
 {
-  "name": "server",
+  "name": "lastrace-server",
   "version": "1.0.0",
-  "description": "",
-  "license": "ISC",
-  "author": "",
   "type": "module",
+  "description": "Last Race backend server",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "start": "node index.js",
+    "dev": "nodemon index.js"
   },
   "dependencies": {
-    "express": "^5.2.1"
+    "express": "^4.18.2",
+    "cors": "^2.8.5",
+    "express-session": "^1.17.3",
+    "connect-sqlite3": "^0.9.13",
+    "passport": "^0.7.0",
+    "passport-local": "^1.0.0",
+    "bcrypt": "^5.1.1",
+    "better-sqlite3": "^12.0.0"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.2"
   }
 }
